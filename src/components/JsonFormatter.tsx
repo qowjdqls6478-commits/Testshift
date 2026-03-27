@@ -82,9 +82,9 @@ export default function JsonFormatter() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 설정 */}
-      <div className="flex gap-4 items-center">
+    <div className="space-y-4">
+      {/* 설정 및 버튼 */}
+      <div className="flex gap-4 items-center flex-wrap">
         <span className="text-gray-400 text-sm">들여쓰기:</span>
         <select
           value={indent}
@@ -95,56 +95,17 @@ export default function JsonFormatter() {
           <option value={4}>4칸</option>
           <option value={8}>8칸</option>
         </select>
-      </div>
-
-      {/* 입력 영역 */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
-          <label className="text-sm font-medium text-gray-300">JSON 입력</label>
-          <div className="flex gap-2">
-            <button
-              onClick={handlePaste}
-              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              붙여넣기
-            </button>
-            <button
-              onClick={handleClear}
-              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              초기화
-            </button>
-          </div>
+        <div className="flex gap-2 ml-auto">
+          <button onClick={() => handleAction("format")} className="btn-primary">
+            포맷팅
+          </button>
+          <button onClick={() => handleAction("minify")} className="btn-secondary">
+            압축
+          </button>
+          <button onClick={() => handleAction("validate")} className="btn-secondary">
+            유효성 검사
+          </button>
         </div>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={'JSON을 입력하세요...\n\n예시:\n{"name":"TextShift","version":"1.0","features":["es-query","json-format"]}'}
-          className="text-area"
-          rows={10}
-        />
-      </div>
-
-      {/* 액션 버튼들 */}
-      <div className="flex gap-3 flex-wrap">
-        <button
-          onClick={() => handleAction("format")}
-          className="btn-primary"
-        >
-          포맷팅
-        </button>
-        <button
-          onClick={() => handleAction("minify")}
-          className="btn-secondary"
-        >
-          한 줄로 압축
-        </button>
-        <button
-          onClick={() => handleAction("validate")}
-          className="btn-secondary"
-        >
-          유효성 검사
-        </button>
       </div>
 
       {/* 유효성 검사 결과 */}
@@ -167,75 +128,74 @@ export default function JsonFormatter() {
         </div>
       )}
 
-      {/* 출력 영역 */}
-      {output && (
+      {/* 좌우 레이아웃 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 왼쪽: 입력 영역 */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="text-sm font-medium text-gray-300">JSON 입력</label>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePaste}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                붙여넣기
+              </button>
+              <button
+                onClick={handleClear}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                초기화
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={'JSON을 입력하세요...\n\n예시:\n{"name":"TextShift","version":"1.0","features":["es-query","json-format"]}'}
+            className="text-area h-[calc(100vh-280px)] min-h-[400px]"
+          />
+        </div>
+
+        {/* 오른쪽: 출력 영역 */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <label className="text-sm font-medium text-gray-300">결과</label>
-            <button
-              onClick={handleCopy}
-              className="btn-secondary text-sm flex items-center gap-2"
-            >
-              {copied ? (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  복사됨
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                    />
-                  </svg>
-                  복사
-                </>
-              )}
-            </button>
+            {output && (
+              <button
+                onClick={handleCopy}
+                className="btn-secondary text-sm flex items-center gap-2"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    복사됨
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    복사
+                  </>
+                )}
+              </button>
+            )}
           </div>
-          <pre className="text-area overflow-auto whitespace-pre-wrap">
-            <code>{output}</code>
+          <pre className="text-area h-[calc(100vh-280px)] min-h-[400px] overflow-auto whitespace-pre-wrap">
+            <code>{output || "결과가 여기에 표시됩니다..."}</code>
           </pre>
         </div>
-      )}
+      </div>
 
       {/* 사용법 안내 */}
-      <div className="mt-8 p-4 bg-gray-800/50 rounded-lg">
-        <h3 className="text-sm font-medium text-gray-300 mb-3">기능 설명</h3>
-        <ul className="text-xs text-gray-400 space-y-2">
-          <li>
-            <strong className="text-gray-300">포맷팅:</strong> 압축된 JSON을 보기 좋게 들여쓰기합니다. 일부 오류는 자동 수정됩니다.
-          </li>
-          <li>
-            <strong className="text-gray-300">한 줄로 압축:</strong> 포맷팅된 JSON을 한 줄로 압축합니다.
-          </li>
-          <li>
-            <strong className="text-gray-300">유효성 검사:</strong> JSON 형식이 올바른지 확인합니다.
-          </li>
-          <li>
-            <strong className="text-gray-300">자동 수정:</strong> 단일 따옴표, 후행 쉼표, 따옴표 없는 키 등을 자동으로 수정합니다.
-          </li>
-        </ul>
+      <div className="p-4 bg-gray-800/50 rounded-lg">
+        <h3 className="text-sm font-medium text-gray-300 mb-2">사용법</h3>
+        <p className="text-xs text-gray-400">
+          JSON을 붙여넣고 포맷팅/압축/유효성 검사를 수행합니다. 단일 따옴표, 후행 쉼표 등 일부 오류는 자동 수정됩니다.
+        </p>
       </div>
     </div>
   );
