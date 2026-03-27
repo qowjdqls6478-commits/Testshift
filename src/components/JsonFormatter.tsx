@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { formatJson, minifyJson, validateJson } from "@/lib/jsonFormatter";
+import { formatJson, minifyJson, validateJson, mergeToArray } from "@/lib/jsonFormatter";
 
-type FormatAction = "format" | "minify" | "validate";
+type FormatAction = "format" | "minify" | "validate" | "merge";
 
 export default function JsonFormatter() {
   const [input, setInput] = useState("");
@@ -38,6 +38,14 @@ export default function JsonFormatter() {
       }
       case "minify": {
         const result = minifyJson(input);
+        setOutput(result.formatted);
+        if (!result.isValid && result.error) {
+          setError(result.error);
+        }
+        break;
+      }
+      case "merge": {
+        const result = mergeToArray(input, indent);
         setOutput(result.formatted);
         if (!result.isValid && result.error) {
           setError(result.error);
@@ -98,6 +106,9 @@ export default function JsonFormatter() {
         <div className="flex gap-2 ml-auto">
           <button onClick={() => handleAction("format")} className="btn-primary">
             포맷팅
+          </button>
+          <button onClick={() => handleAction("merge")} className="btn-secondary">
+            배열로 합치기
           </button>
           <button onClick={() => handleAction("minify")} className="btn-secondary">
             압축

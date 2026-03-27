@@ -146,6 +146,101 @@ function formatMultipleJson(input: string, indent: number = 2): FormatResult {
 }
 
 /**
+ * 여러 JSON을 하나의 배열로 합치기
+ */
+export function mergeToArray(input: string, indent: number = 2): FormatResult {
+  const trimmed = input.trim();
+  
+  if (!trimmed) {
+    return {
+      formatted: '',
+      isValid: false,
+      error: '입력값이 비어있습니다.'
+    };
+  }
+  
+  // 이미 배열인 경우 그대로 포맷팅
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return {
+        formatted: JSON.stringify(parsed, null, indent),
+        isValid: true
+      };
+    } catch {
+      // 파싱 실패 시 계속 진행
+    }
+  }
+  
+  let parts: string[] = [];
+  
+  // 줄바꿈으로 구분된 경우
+  const lines = trimmed.split('\n').filter(line => line.trim());
+  if (lines.length >= 1) {
+    let allValid = true;
+    for (const line of lines) {
+      try {
+        JSON.parse(line.trim());
+      } catch {
+        allValid = false;
+        break;
+      }
+    }
+    if (allValid) {
+      parts = lines.map(l => l.trim());
+    }
+  }
+  
+  // 연속으로 붙어있는 경우
+  if (parts.length === 0) {
+    parts = splitConcatenatedJson(trimmed);
+  }
+  
+  // 단일 JSON인 경우
+  if (parts.length === 0) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return {
+        formatted: JSON.stringify([parsed], null, indent),
+        isValid: true
+      };
+    } catch (err) {
+      return {
+        formatted: input,
+        isValid: false,
+        error: `JSON 파싱 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`
+      };
+    }
+  }
+  
+  // 여러 JSON을 배열로 합치기
+  const merged: unknown[] = [];
+  const errors: string[] = [];
+  
+  for (let i = 0; i < parts.length; i++) {
+    try {
+      const parsed = JSON.parse(parts[i]);
+      merged.push(parsed);
+    } catch (err) {
+      errors.push(`JSON ${i + 1}: ${err instanceof Error ? err.message : '파싱 오류'}`);
+    }
+  }
+  
+  if (errors.length > 0) {
+    return {
+      formatted: input,
+      isValid: false,
+      error: errors.join('; ')
+    };
+  }
+  
+  return {
+    formatted: JSON.stringify(merged, null, indent),
+    isValid: true
+  };
+}
+
+/**
  * JSON 문자열을 보기 좋게 포맷팅
  */
 export function formatJson(input: string, indent: number = 2): FormatResult {
