@@ -9,45 +9,132 @@ export interface FormatResult {
 }
 
 /**
- * NDJSON (줄바꿈으로 구분된 JSON) 감지
+ * 연속된 JSON 객체들 분리 (}{로 붙어있는 경우)
  */
-function isNDJSON(input: string): boolean {
-  const lines = input.trim().split('\n').filter(line => line.trim());
-  if (lines.length < 2) return false;
+function splitConcatenatedJson(input: string): string[] {
+  const results: string[] = [];
+  let depth = 0;
+  let start = 0;
+  let inString = false;
+  let escape = false;
   
-  // 각 줄이 독립적인 JSON 객체/배열인지 확인
-  let validCount = 0;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-      try {
-        JSON.parse(trimmed);
-        validCount++;
-      } catch {
-        // 파싱 실패
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (inString) continue;
+    
+    if (char === '{' || char === '[') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (char === '}' || char === ']') {
+      depth--;
+      if (depth === 0) {
+        results.push(input.slice(start, i + 1));
       }
     }
   }
   
-  return validCount >= 2 && validCount === lines.length;
+  return results;
 }
 
 /**
- * NDJSON 포맷팅
+ * 여러 JSON 감지 (줄바꿈 또는 연속)
  */
-function formatNDJSON(input: string, indent: number = 2): FormatResult {
+function isMultipleJson(input: string): boolean {
+  // 줄바꿈으로 구분된 경우
   const lines = input.trim().split('\n').filter(line => line.trim());
+  if (lines.length >= 2) {
+    let validCount = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          JSON.parse(trimmed);
+          validCount++;
+        } catch {
+          // 파싱 실패
+        }
+      }
+    }
+    if (validCount >= 2 && validCount === lines.length) return true;
+  }
+  
+  // 연속으로 붙어있는 경우 (}{)
+  const trimmed = input.trim();
+  if (trimmed.includes('}{') || trimmed.includes('][')) {
+    const parts = splitConcatenatedJson(trimmed);
+    if (parts.length >= 2) {
+      let validCount = 0;
+      for (const part of parts) {
+        try {
+          JSON.parse(part);
+          validCount++;
+        } catch {
+          // 파싱 실패
+        }
+      }
+      if (validCount >= 2) return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * 여러 JSON 포맷팅
+ */
+function formatMultipleJson(input: string, indent: number = 2): FormatResult {
+  const trimmed = input.trim();
+  let parts: string[] = [];
+  
+  // 줄바꿈으로 구분된 경우
+  const lines = trimmed.split('\n').filter(line => line.trim());
+  if (lines.length >= 2) {
+    let allValid = true;
+    for (const line of lines) {
+      try {
+        JSON.parse(line.trim());
+      } catch {
+        allValid = false;
+        break;
+      }
+    }
+    if (allValid) {
+      parts = lines.map(l => l.trim());
+    }
+  }
+  
+  // 연속으로 붙어있는 경우
+  if (parts.length === 0) {
+    parts = splitConcatenatedJson(trimmed);
+  }
+  
   const formatted: string[] = [];
   const errors: string[] = [];
   
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = 0; i < parts.length; i++) {
     try {
-      const parsed = JSON.parse(lines[i].trim());
+      const parsed = JSON.parse(parts[i]);
       formatted.push(JSON.stringify(parsed, null, indent));
     } catch (err) {
-      errors.push(`줄 ${i + 1}: ${err instanceof Error ? err.message : '파싱 오류'}`);
-      formatted.push(lines[i].trim());
+      errors.push(`JSON ${i + 1}: ${err instanceof Error ? err.message : '파싱 오류'}`);
+      formatted.push(parts[i]);
     }
   }
   
@@ -73,9 +160,9 @@ export function formatJson(input: string, indent: number = 2): FormatResult {
       };
     }
 
-    // NDJSON 감지
-    if (isNDJSON(trimmed)) {
-      return formatNDJSON(trimmed, indent);
+    // 여러 JSON 감지 (줄바꿈 또는 연속)
+    if (isMultipleJson(trimmed)) {
+      return formatMultipleJson(trimmed, indent);
     }
 
     // 먼저 JSON 파싱 시도
@@ -86,6 +173,11 @@ export function formatJson(input: string, indent: number = 2): FormatResult {
       isValid: true
     };
   } catch (err) {
+    // 파싱 실패 시 여러 JSON인지 다시 확인
+    if (isMultipleJson(input.trim())) {
+      return formatMultipleJson(input.trim(), indent);
+    }
+    
     // 파싱 실패 시 자동 수정 시도
     const fixResult = tryFixJson(input);
     
@@ -151,10 +243,30 @@ export function minifyJson(input: string): FormatResult {
   try {
     const trimmed = input.trim();
     
-    // NDJSON 감지
-    if (isNDJSON(trimmed)) {
+    // 여러 JSON 감지
+    if (isMultipleJson(trimmed)) {
+      // 줄바꿈으로 구분된 경우
       const lines = trimmed.split('\n').filter(line => line.trim());
-      const minified = lines.map(line => JSON.stringify(JSON.parse(line.trim()))).join('\n');
+      let parts: string[] = [];
+      
+      let allValid = true;
+      for (const line of lines) {
+        try {
+          JSON.parse(line.trim());
+        } catch {
+          allValid = false;
+          break;
+        }
+      }
+      
+      if (allValid && lines.length >= 2) {
+        parts = lines.map(l => l.trim());
+      } else {
+        // 연속으로 붙어있는 경우
+        parts = splitConcatenatedJson(trimmed);
+      }
+      
+      const minified = parts.map(part => JSON.stringify(JSON.parse(part))).join('\n');
       return {
         formatted: minified,
         isValid: true
@@ -168,6 +280,20 @@ export function minifyJson(input: string): FormatResult {
       isValid: true
     };
   } catch (err) {
+    // 파싱 실패 시 여러 JSON인지 다시 확인
+    if (isMultipleJson(input.trim())) {
+      const parts = splitConcatenatedJson(input.trim());
+      try {
+        const minified = parts.map(part => JSON.stringify(JSON.parse(part))).join('\n');
+        return {
+          formatted: minified,
+          isValid: true
+        };
+      } catch {
+        // 무시
+      }
+    }
+    
     return {
       formatted: input,
       isValid: false,
