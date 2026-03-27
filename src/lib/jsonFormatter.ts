@@ -9,6 +9,56 @@ export interface FormatResult {
 }
 
 /**
+ * NDJSON (줄바꿈으로 구분된 JSON) 감지
+ */
+function isNDJSON(input: string): boolean {
+  const lines = input.trim().split('\n').filter(line => line.trim());
+  if (lines.length < 2) return false;
+  
+  // 각 줄이 독립적인 JSON 객체/배열인지 확인
+  let validCount = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        JSON.parse(trimmed);
+        validCount++;
+      } catch {
+        // 파싱 실패
+      }
+    }
+  }
+  
+  return validCount >= 2 && validCount === lines.length;
+}
+
+/**
+ * NDJSON 포맷팅
+ */
+function formatNDJSON(input: string, indent: number = 2): FormatResult {
+  const lines = input.trim().split('\n').filter(line => line.trim());
+  const formatted: string[] = [];
+  const errors: string[] = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      const parsed = JSON.parse(lines[i].trim());
+      formatted.push(JSON.stringify(parsed, null, indent));
+    } catch (err) {
+      errors.push(`줄 ${i + 1}: ${err instanceof Error ? err.message : '파싱 오류'}`);
+      formatted.push(lines[i].trim());
+    }
+  }
+  
+  return {
+    formatted: formatted.join('\n\n'),
+    isValid: errors.length === 0,
+    error: errors.length > 0 ? errors.join('; ') : undefined
+  };
+}
+
+/**
  * JSON 문자열을 보기 좋게 포맷팅
  */
 export function formatJson(input: string, indent: number = 2): FormatResult {
@@ -21,6 +71,11 @@ export function formatJson(input: string, indent: number = 2): FormatResult {
         isValid: false,
         error: '입력값이 비어있습니다.'
       };
+    }
+
+    // NDJSON 감지
+    if (isNDJSON(trimmed)) {
+      return formatNDJSON(trimmed, indent);
     }
 
     // 먼저 JSON 파싱 시도
@@ -94,7 +149,19 @@ function tryFixJson(input: string): FormatResult {
  */
 export function minifyJson(input: string): FormatResult {
   try {
-    const parsed = JSON.parse(input.trim());
+    const trimmed = input.trim();
+    
+    // NDJSON 감지
+    if (isNDJSON(trimmed)) {
+      const lines = trimmed.split('\n').filter(line => line.trim());
+      const minified = lines.map(line => JSON.stringify(JSON.parse(line.trim()))).join('\n');
+      return {
+        formatted: minified,
+        isValid: true
+      };
+    }
+    
+    const parsed = JSON.parse(trimmed);
     
     return {
       formatted: JSON.stringify(parsed),
