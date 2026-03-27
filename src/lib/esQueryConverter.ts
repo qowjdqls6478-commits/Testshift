@@ -45,36 +45,73 @@ export function extractJsonFromLog(input: string): string {
 /**
  * ES 디버그 로그를 정리하여 실행 가능한 쿼리로 변환
  */
-export function convertToExecutableQuery(input: string): { query: string; error?: string } {
+export function convertToExecutableQuery(input: string): { query: string; error?: string; endpoint?: string } {
   try {
     let processed = input.trim();
+    let endpoint: string | undefined;
 
-    // 1. 로그 프리픽스 제거 (타임스탬프, 로그 레벨 등)
+    // 1. ES 요청 형식에서 엔드포인트 추출 (GET index/_search, POST index/_doc 등)
+    const esRequestPattern = /^(GET|POST|PUT|DELETE)\s+([^\s{]+)\s*/i;
+    const esMatch = processed.match(esRequestPattern);
+    if (esMatch) {
+      endpoint = `${esMatch[1].toUpperCase()} ${esMatch[2]}`;
+      processed = processed.replace(esRequestPattern, '');
+    }
+
+    // 2. 로그 프리픽스 제거 (타임스탬프, 로그 레벨 등)
     processed = removeLogPrefix(processed);
 
-    // 2. JSON 부분 추출
+    // 3. JSON 부분 추출
     processed = extractJsonFromLog(processed);
 
-    // 3. 이스케이프된 따옴표 처리
+    // 4. 중첩 이스케이프 처리 (JSON 문자열 내부의 따옴표)
+    // 원본: {\"query\":\"folderpath:\\\"/내 문서함\\\"\"}
+    // 목표: {"query":"folderpath:\"/내 문서함\""}
+    // 
+    // \\\" (백슬래시 3개 + 따옴표) -> \" (JSON 내부 이스케이프된 따옴표로 유지)
+    // \" (백슬래시 1개 + 따옴표) -> " (외부 이스케이프 해제)
+    
+    // 먼저 \\\" (백슬래시 3개 + 따옴표)를 임시 토큰으로 보호
+    const INNER_QUOTE = '___INNER_QUOTE___';
+    processed = processed.replace(/\\\\\\\"/g, INNER_QUOTE);
+    
+    // 그 다음 \" (백슬래시 1개 + 따옴표)를 따옴표로 변환 (외부 이스케이프 해제)
     processed = processed.replace(/\\"/g, '"');
-    processed = processed.replace(/\\\\/g, '\\');
+    
+    // 임시 토큰을 다시 \" 로 복원 (JSON 내부 이스케이프 유지)
+    processed = processed.replace(new RegExp(INNER_QUOTE, 'g'), '\\"');
+    
+    // 이중 백슬래시 처리 \\\\ -> \\
+    processed = processed.replace(/\\\\\\\\/g, '\\\\');
+    
+    // 백슬래시 + u 이스케이프 처리 (\\u -> \u)
+    processed = processed.replace(/\\\\u/g, '\\u');
 
-    // 4. Java toString() 형식 정리 (예: Type@hashcode)
+    // 5. 유니코드 이스케이프 처리 (\u003C -> <)
+    processed = processed.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => 
+      String.fromCharCode(parseInt(hex, 16))
+    );
+
+    // 6. Java toString() 형식 정리 (예: Type@hashcode)
     processed = processed.replace(/\w+@[a-f0-9]+/gi, '');
 
-    // 5. Lucene 쿼리 문법 정리
+    // 7. Lucene 쿼리 문법 정리
     processed = cleanLuceneSpecificSyntax(processed);
 
-    // 6. JSON 파싱 시도
+    // 8. JSON 파싱 시도
     try {
       const parsed = JSON.parse(processed);
+      const formattedQuery = JSON.stringify(parsed, null, 2);
+      
       return {
-        query: JSON.stringify(parsed, null, 2)
+        query: endpoint ? `${endpoint}\n${formattedQuery}` : formattedQuery,
+        endpoint
       };
     } catch {
       // JSON 파싱 실패 시 기본 정리만 수행
       return {
         query: processed,
+        endpoint,
         error: 'JSON 파싱에 실패했습니다. 수동으로 확인이 필요할 수 있습니다.'
       };
     }
